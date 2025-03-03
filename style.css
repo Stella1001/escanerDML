@@ -1,0 +1,123 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Montserrat", sans-serif;
+}
+
+h2{
+    margin-top: 20px;
+}
+body {
+    background-color: #9ACBD0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.container {
+    width: 90%;
+    max-width: 900px;
+}
+
+.titulo{
+    margin-top: 20px;
+    margin-bottom: 30px;
+}
+
+.moduloEntrada {
+    margin-top: 50px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    margin-top: 30px;
+    font-size: 20px;
+    font-weight: 600;
+    color: #213555;
+}
+
+
+.textarea-container {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    gap: 10px;
+}
+
+textarea {
+    width: 600px;
+    height: 150px;
+    padding: 10px 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    resize: none;
+}
+
+/* estilo del boton */
+.boton {
+    background-color: #5b7cfd;
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-top: 0;
+    height: 40px;
+}
+
+/* estilo de las tablas */
+.table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 60px 20px;
+
+}
+
+.table th, .table td {
+    border: 1px solid black;
+    padding: 15px 40px;
+}
+
+.table th {
+    background-color: #5b7cfd;
+    color: white;
+}
+
+.table tr{
+    background-color: white;
+}
+
+.table tr:hover {
+    background-color: #C4D9FF;
+}
+
+
+@media (max-width: 768px) {
+    .textarea-container {
+        flex-direction: column;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    textarea {
+        width: 400px;
+        height: 100px;
+        padding: 10px 20px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        resize: none;
+    }
+
+    .table {
+        width: 100%;
+        font-size: 14px;
+    }
+
+    .table th, .table td {
+        padding: 8px 12px;
+    }
+}
