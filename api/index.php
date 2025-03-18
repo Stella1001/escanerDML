@@ -1,49 +1,71 @@
 <?php
 
-
-
-
-// Inicializamos variables de texto, tablas léxica y de símbolos, y arreglo de errores.
 $texto = "";
 $lexical_table = array();
 $symbol_ident = array();
 $symbol_const = array();
 $errors = array();
 
-// Contadores para asignación dinámica
-$ident_counter = 401;  // Identificadores
-$const_counter = 600;  // Constantes
 
-// Mapeo de palabras reservadas (token tipo 1) con sus códigos predefinidos.
+$ident_counter = 401;
+$const_counter = 600;
+
+
 $reserved = array(
-    "SELECT" => 10,
-    "FROM"   => 11,
-    "WHERE"  => 12,
-    "AND"    => 14,
-    "OR"     => 15,
-    "CREATE" => 16,
-    "TABLE"  => 17,
-    "CHAR"   => 18,
-    "NUMERIC"=> 19,
-    "NOT"    => 20,
-    "NULL"   => 21
+    "SELECT"   => ["s", 10],
+    "FROM"     => ["f", 11],
+    "WHERE"    => ["w", 12],
+    "IN"       => ["n", 13],
+    "AND"      => ["y", 14],
+    "OR"       => ["o", 15],
+    "CREATE"   => ["c", 16],
+    "TABLE"    => ["t", 17],
+    "CHAR"     => ["h", 18],
+    "NUMERIC"  => ["u", 19],
+    "NOT"      => ["e", 20],
+    "NULL"     => ["g", 21],
+    "CONSTRAINT" => ["b", 22],
+    "KEY"      => ["k", 23],
+    "PRIMARY"  => ["p", 24],
+    "FOREIGN"  => ["j", 25],
+    "REFERENCES" => ["l", 26],
+    "INSERT"   => ["m", 27],
+    "INTO"     => ["q", 28],
+    "VALUES"   => ["v", 29],
+
+    "UPDATE"   => ["u", 30],
+    "DELETE"   => ["d", 31],
+    "SET"      => ["z", 32]
 );
 
-// Actualizamos el patrón general (agregamos /u para Unicode)
-// Grupos:
-//   1. Operadores relacionales (incluyendo '*'): >=, <=, <>, =, >, <, *
-//   2. Delimitadores: coma, punto y coma, paréntesis
-//   3. Constantes de cadena: delimitadas por cualquiera de las comillas: ’, ‘ o '
-//   4. Constantes numéricas: enteros o decimales
-//   5. Identificadores: palabras que inician con letra o _
-//   6. Cualquier otro carácter no blanco (para marcar error)
-$pattern = '/(>=|<=|<>|=|>|<|\*)|([,;()])|([‘’\'][^‘’\']+[‘’\'])|(\b\d+(?:\.\d+)?\b)|(\b[a-zA-Z_][a-zA-Z0-9_]*\b)|(\S)/u';
+
+$delimiters = array(
+    "," => 50,
+    "." => 51,
+    ")" => 52,
+    "(" => 53,
+    ";" => 55
+);
 
 
+$operators = array(
+    "+" => 70,
+    "-" => 71,
+    "*" => 72,
+    "/" => 73
+);
 
-// Patrón para constantes de cadena (para llenar la tabla de símbolos de constantes).
-// Se capturará el contenido interno sin las comillas.
-$regex_const = "/[‘’']([^‘’']+)[‘’']/u";
+
+$relational_operators = array(
+    ">"  => 81,
+    "<"  => 82,
+    "="  => 83,
+    ">=" => 84,
+    "<=" => 85
+);
+
+
+$pattern = '/(\s+)|(?:"([^"]*)"|\'([^\']*)\'|[‘’](.*?)[‘’]|[“”](.*?)[“”])|(>=|<=|=|>|<|\*|\+|-|\/)|([,;()\.])|(\b\d+(?:\.\d+)?\b)|(\b[a-zA-Z_][a-zA-Z0-9_#]*(?:\.[a-zA-Z0-9_#]+)?\b#?)|(\S)/u';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["regexInput"])) {
     $texto = $_POST["regexInput"];
@@ -51,136 +73,116 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["regexInput"])) {
     foreach ($lines as $line_num => $line) {
         if (preg_match_all($pattern, $line, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
+
+                if (!empty($match[1])) continue;
+
                 $token_value = "";
                 $token_type = 0;
                 $token_code = 0;
 
-                // 1. Operadores (grupo 1)
-                if (!empty($match[1])) {
-                    $token_value = $match[1];
-                    $token_type = 8;
-                    if ($token_value == "=") {
-                        $token_code = 83;
-                    } elseif ($token_value == ">=") {
-                        $token_code = 84;
-                    } elseif ($token_value == "<=") {
-                        $token_code = 85;
-                    } elseif ($token_value == ">") {
-                        $token_code = 87;
-                    } elseif ($token_value == "<") {
-                        $token_code = 88;
-                    } elseif ($token_value == "<>") {
-                        $token_code = 86;
-                    } elseif ($token_value == "*") {
-                        $token_code = 9;
-                    } else {
-                        $token_code = 0;
-                        $errors[] = "Operador desconocido '$token_value' en línea " . ($line_num+1);
-                    }
-                }
-                // 2. Delimitadores (grupo 2)
-                elseif (!empty($match[2])) {
-                    $token_value = $match[2];
-                    $token_type = 5;
-                    if ($token_value == ",") {
-                        $token_code = 50;
-                    } elseif ($token_value == ";") {
-                        $token_code = 52;
-                    } else {
-                        $token_code = 0;
-                    }
-                }
-                // 3. Constantes de cadena (grupo 3)
-                elseif (!empty($match[3])) {
-                    $full_const = $match[3]; // Incluye las comillas
-                    $token_value = "CONSTANTE";
-                    $token_type = 6;
-                    $const_content = mb_substr($full_const, 1, mb_strlen($full_const, 'UTF-8') - 2, 'UTF-8');
 
-                    // Para constantes alfanuméricas se asigna tipo 62.
-                    $const_symbol_type = 62;
-                    if (!isset($symbol_const[$const_content])) {
-                        $symbol_const[$const_content] = array(
-                            'constante' => $const_content,
-                            'tipo' => $const_symbol_type,
-                            'code' => $const_counter,
-                            'lineas' => array($line_num+1)
-                        );
-                        $token_code = $const_counter;
-                        $const_counter++;
-                    } else {
-                        if (!in_array($line_num+1, $symbol_const[$const_content]['lineas'])) {
-                            $symbol_const[$const_content]['lineas'][] = $line_num+1;
-                        }
-                        $token_code = $symbol_const[$const_content]['code'];
-                    }
-                }
-                // 4. Constantes numéricas (grupo 4)
-                elseif (!empty($match[4])) {
+                if (!empty($match[2]) || !empty($match[3]) || !empty($match[4]) || !empty($match[5])) {
                     $token_value = "CONSTANTE";
                     $token_type = 6;
-                    $num_const = $match[4];
-                    // Para constantes numéricas, el tipo de símbolo será 61.
+                    if (!empty($match[2])) {
+                        $const_content = $match[2];
+                    } elseif (!empty($match[3])) {
+                        $const_content = $match[3];
+                    } elseif (!empty($match[4])) {
+                        $const_content = $match[4];
+                    } else {
+                        $const_content = $match[5];
+                    }
+                    if (!isset($symbol_const[$const_content])) {
+                        $symbol_const[$const_content] = [
+                            'constante' => $const_content,
+                            'tipo' => 62,
+                            'code' => $const_counter,
+                            'lineas' => [$line_num + 1]
+                        ];
+                        $token_code = $const_counter++;
+                    } else {
+                        $token_code = $symbol_const[$const_content]['code'];
+                        if (!in_array($line_num + 1, $symbol_const[$const_content]['lineas'])) {
+                            $symbol_const[$const_content]['lineas'][] = $line_num + 1;
+                        }
+                    }
+                } elseif (!empty($match[6])) {
+
+                    $token_value = $match[6];
+                    $token_type = 8;
+                    if (isset($relational_operators[$token_value])) {
+                        $token_code = $relational_operators[$token_value];
+                    } elseif (isset($operators[$token_value])) {
+                        $token_code = $operators[$token_value];
+                    } else {
+                        $token_code = 0;
+                    }
+                } elseif (!empty($match[7])) {
+
+                    $token_value = $match[7];
+                    $token_type = 5;
+                    $token_code = isset($delimiters[$token_value]) ? $delimiters[$token_value] : 0;
+                } elseif (!empty($match[8])) {
+
+                    $token_value = "CONSTANTE";
+                    $token_type = 6;
+                    $num_const = trim($match[8]);
                     if (!isset($symbol_const[$num_const])) {
-                        $symbol_const[$num_const] = array(
+                        $symbol_const[$num_const] = [
                             'constante' => $num_const,
                             'tipo' => 61,
                             'code' => $const_counter,
-                            'lineas' => array($line_num+1)
-                        );
-                        $token_code = $const_counter;
-                        $const_counter++;
+                            'lineas' => [$line_num + 1]
+                        ];
+                        $token_code = $const_counter++;
                     } else {
-                        if (!in_array($line_num+1, $symbol_const[$num_const]['lineas'])) {
-                            $symbol_const[$num_const]['lineas'][] = $line_num+1;
-                        }
                         $token_code = $symbol_const[$num_const]['code'];
+                        if (!in_array($line_num + 1, $symbol_const[$num_const]['lineas'])) {
+                            $symbol_const[$num_const]['lineas'][] = $line_num + 1;
+                        }
                     }
-                }
-                // 5. Identificadores (grupo 5)
-                elseif (!empty($match[5])) {
-                    $token_value = $match[5];
+                } elseif (!empty($match[9])) {
+
+                    $token_value = $match[9];
                     if (isset($reserved[strtoupper($token_value)])) {
                         $token_type = 1;
-                        $token_code = $reserved[strtoupper($token_value)];
+                        list($symbol, $token_code) = $reserved[strtoupper($token_value)];
                     } else {
                         $token_type = 4;
                         if (!isset($symbol_ident[$token_value])) {
-                            $symbol_ident[$token_value] = array(
+                            $symbol_ident[$token_value] = [
                                 'identificador' => $token_value,
                                 'code' => $ident_counter,
-                                'lineas' => array($line_num+1)
-                            );
-                            $token_code = $ident_counter;
-                            $ident_counter++;
+                                'lineas' => [$line_num + 1]
+                            ];
+                            $token_code = $ident_counter++;
                         } else {
-                            if (!in_array($line_num+1, $symbol_ident[$token_value]['lineas'])) {
-                                $symbol_ident[$token_value]['lineas'][] = $line_num+1;
-                            }
                             $token_code = $symbol_ident[$token_value]['code'];
+                            if (!in_array($line_num + 1, $symbol_ident[$token_value]['lineas'])) {
+                                $symbol_ident[$token_value]['lineas'][] = $line_num + 1;
+                            }
                         }
                     }
-                }
-                // 6. Otros (grupo 6): token desconocido
-                elseif (!empty($match[6])) {
-                    $token_value = $match[6];
+                } elseif (!empty($match[10])) {
+
+                    $token_value = $match[10];
                     $token_type = 0;
                     $token_code = 0;
-                    $errors[] = "Token desconocido '$token_value' en línea " . ($line_num+1);
+                    $errors[] = "error linea " . ($line_num + 1) . ". Simbolo desconocido: " . $token_value;
                 }
 
-                $lexical_table[] = array(
-                    'linea' => $line_num+1,
+                $lexical_table[] = [
+                    'linea' => $line_num + 1,
                     'token' => $token_value,
                     'tipo' => $token_type,
                     'codigo' => $token_code
-                );
+                ];
             }
         }
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -188,7 +190,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["regexInput"])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escáner DML</title>
     <link rel="stylesheet" href="/css/style.css"/>
-
     <script>
         function resetForm() {
             document.getElementById("regexInput").value = "";
@@ -207,15 +208,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["regexInput"])) {
         </div>
     </form>
     <?php if ($_SERVER["REQUEST_METHOD"] == "POST"): ?>
+        <h2>Resultado del Escáner</h2>
         <?php if (!empty($errors)): ?>
-            <h2>Módulo de Errores</h2>
-            <ul>
-                <?php foreach ($errors as $err): ?>
-                    <li><?= htmlspecialchars($err) ?></li>
-                <?php endforeach; ?>
-            </ul>
+            <?php
+            foreach ($errors as $err) {
+                echo "<p>" . htmlspecialchars($err) . "</p>";
+            }
+            ?>
         <?php else: ?>
-            <h2>Módulo de Resultados</h2>
+            <p>sin errores</p>
             <h3>Tabla Léxica</h3>
             <table class="table">
                 <thead>
@@ -255,7 +256,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["regexInput"])) {
                     <tr>
                         <td><?= htmlspecialchars($id['identificador']) ?></td>
                         <td><?= $id['code'] ?></td>
-                        <td><?= implode(", ", $id['lineas']) ?></td>
+                        <td><?= implode(", ", array_unique($id['lineas'])) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -266,7 +267,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["regexInput"])) {
                 <thead>
                 <tr>
                     <th>Constante</th>
-                    <th>Tipo</th>
                     <th>Valor</th>
                     <th>Línea</th>
                 </tr>
@@ -275,9 +275,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["regexInput"])) {
                 <?php foreach ($symbol_const as $c): ?>
                     <tr>
                         <td><?= htmlspecialchars($c['constante']) ?></td>
-                        <td><?= $c['tipo'] ?></td>
                         <td><?= $c['code'] ?></td>
-                        <td><?= implode(", ", $c['lineas']) ?></td>
+                        <td><?= implode(", ", array_unique($c['lineas'])) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
